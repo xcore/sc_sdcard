@@ -1,0 +1,13 @@
+FAT16 File System
+
+Known Issues
+------------
+
+1. When determining the file system the 1st partition is used to decide which file system is used on the disk. This method however can fail as it not guarenteed
+   by the hardware specification. The work aound is to comment out the file system check. Currently only FAT16 is supported.
+
+2. All file names must be in uppercase.
+
+3. When writing multiple files reading fome linux can break
+
+4. Long file name truncation does not guarentee a unique file name.
