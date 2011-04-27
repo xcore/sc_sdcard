@@ -1,5 +1,5 @@
-<title>
-.......
+SD Card Libary
+..............
 
 :Stable release: unreleased
 
@@ -10,9 +10,11 @@
 :Description:  SD card driver library
 
 
+
 Key Features
 ============
 
+* **Please note: FAT with long file names may be covered by various patents (in particular those held by Microsoft). Use of this code may require licensing from the patent holders**
 * <Bullet pointed list of features>
 
 To Do
