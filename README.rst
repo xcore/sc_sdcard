@@ -10,17 +10,17 @@ SD Card Libary
 :Description:  SD card driver library
 
 
-
 Key Features
 ============
 
 * **Please note: FAT with long file names may be covered by various patents (in particular those held by Microsoft). Use of this code may require licensing from the patent holders**
-* <Bullet pointed list of features>
+* Port of FatFS - FAT file system module R0.08b (C)ChaN, 2011 (http://elm-chan.org/fsw/ff/00index_e.html).
 
 To Do
 =====
 
-* <Bullet pointed list of missing features>
+* Tidy up code to use the module system.
+* Improve the interface code to use clock blocks and buffered ports, so that once initialised at 400kHz, it switches to 25 or 50MHz.
 
 Firmware Overview
 =================
@@ -30,7 +30,7 @@ Firmware Overview
 Known Issues
 ============
 
-* <Bullet pointed list of problems>
+* Currently quite slow as uses 400kHz bit banged interface.
 
 Required Repositories
 ================
