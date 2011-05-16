@@ -126,10 +126,7 @@ static int wait_ready (void)
 /* Deselect the card and release SPI bus                                 */
 static void deselect (void)
 {
-	BYTE d;
-
 	CS_H();
-	//rcvr_mmc(&d, 1);
 }
 
 

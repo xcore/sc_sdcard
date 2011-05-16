@@ -3,13 +3,10 @@
 // University of Illinois/NCSA Open Source License posted in
 // LICENSE.txt and at <http://github.xcore.com/>
 
-#include <xs1.h>
+#ifndef _TIMING_H_
+#define _TIMING_H_
 
-void test ( void );
+	// Functions to get the time from a timer.
+	unsigned int get_time ( void );
 
-int main (void)
-{
-	test();
-
-	return 0;
-}
+#endif // _TIMING_H_

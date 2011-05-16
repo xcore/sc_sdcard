@@ -9,7 +9,9 @@
 // FatFs sample project for generic microcontrollers (C)ChaN, 2010
 
 #include <stdio.h>
+#include <stdlib.h>
 #include "ff.h"
+#include "timing.h"
 
 /* Stop with dying message */
 /* FatFs return value */
@@ -27,40 +29,30 @@ void test (void)
 	FIL fil;				/* File object */
 	DIR dir;				/* Directory object */
 	FILINFO fno;			/* File information object */
-	UINT bw, br, i;
-	BYTE buff[128];
+	UINT bw, i;
+	BYTE my_data[1024];
+	UINT time_start, time_stop;
 
 	f_mount(0, &fatfs);		/* Register volume work area (never fails) */
 
-	printf("\nCreate a new file (hello.txt).\n");
-	rc = f_open(&fil, "HELLO.TXT", FA_WRITE | FA_CREATE_ALWAYS);
-	if (rc) die(rc);
-
-	printf("\nOpen a test file (message.txt).\n");
-	rc = f_open(&fil, "MESSAGE.TXT", FA_READ);
-	if (rc) die(rc);
-
-	printf("\nType the file content.\n");
-	for (;;) {
-		rc = f_read(&fil, buff, sizeof(buff), &br);	/* Read a chunk of file */
-		if (rc || !br) break;			/* Error or end of file */
-		for (i = 0; i < br; i++)		/* Type the data */
-			putchar(buff[i]);
+	for ( i = 0; i < 1024; i++ )
+	{
+		my_data[i] = '1';
 	}
-	if (rc) die(rc);
 
-	printf("\nClose the file.\n");
-	rc = f_close(&fil);
-	if (rc) die(rc);
+	my_data[1023] = '\0';
 
 	printf("\nCreate a new file (hello.txt).\n");
 	rc = f_open(&fil, "HELLO.TXT", FA_WRITE | FA_CREATE_ALWAYS);
 	if (rc) die(rc);
 
-	printf("\nWrite a text data. (Hello world!)\n");
-	rc = f_write(&fil, "Hello world!\r\n", 14, &bw);
+	printf("\nWrite 1024 bytes of text data\n");
+	time_start = get_time();
+	rc = f_write(&fil, my_data, 1024, &bw);
+	time_stop = get_time();
 	if (rc) die(rc);
-	printf("%u bytes written.\n", bw);
+	printf("%u bytes written in %u ticks (10ns).\n", bw, (time_stop-time_start) );
+	printf("Data Rate is %u KB/sec.\n", ( 100000000 / (time_stop - time_start) ) );
 
 	printf("\nClose the file.\n");
 	rc = f_close(&fil);
@@ -71,7 +63,8 @@ void test (void)
 	if (rc) die(rc);
 
 	printf("\nDirectory listing...\n");
-	for (;;) {
+	for (;;)
+	{
 		rc = f_readdir(&dir, &fno);		/* Read a directory item */
 		if (rc || !fno.fname[0]) break;	/* Error or end of dir */
 		if (fno.fattrib & AM_DIR)
@@ -82,9 +75,9 @@ void test (void)
 	if (rc) die(rc);
 
 	printf("\nTest completed.\n");
-	for (;;) ;
-}
 
+	exit(0);
+}
 
 // User Provided Timer Function for FatFs module
 DWORD get_fattime (void)

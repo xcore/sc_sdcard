@@ -3,13 +3,19 @@
 // University of Illinois/NCSA Open Source License posted in
 // LICENSE.txt and at <http://github.xcore.com/>
 
+// Functions to interface to the SD Card
 #include <xs1.h>
+#include <platform.h>
+#include "timing.h"
 
-void test ( void );
+timer t;
 
-int main (void)
+// Functions to get the time from a timer.
+unsigned int get_time ( void )
 {
-	test();
+	unsigned int time;
 
-	return 0;
+	t :> time;
+
+	return time;
 }
