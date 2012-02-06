@@ -1,7 +1,7 @@
 SD Card Libary
 ..............
 
-:Stable release: unreleased
+:Stable release: 1.0.1
 
 :Status:  alpha
 
@@ -13,32 +13,38 @@ SD Card Libary
 Key Features
 ============
 
-* **Please note: FAT with long file names may be covered by various patents (in particular those held by Microsoft). Use of this code may require licensing from the patent holders**
-* Port of FatFS - FAT file system module R0.08b (C)ChaN, 2011 (http://elm-chan.org/fsw/ff/00index_e.html).
+* Read and write data operations on SD cards using either the SPI interface or native 4bit interface
+* Port of FatFS - FAT file system module R0.09 (C)ChaN, 2011 (http://elm-chan.org/fsw/ff/00index_e.html).
+* **Beware: FAT with long file names may be covered by various patents (in particular those held by Microsoft). Use of this code may require licensing from the patent holders**
+* **Beware: 4bit SD protocol is subject to petents of the SD Association. When enabled on commercial products a license may be required. (see: https://www.sdcard.org/developers/howto/ )**
+* Benchmark with 4bit interface multiblock read speed is about 4MBytes/sec. 1.2MBytes/sec with SPI. 
 
 To Do
 =====
 
-* Tidy up code to use the module system.
-* Improve the interface code to use clock blocks and buffered ports, so that once initialised at 400kHz, it switches to 25 or 50MHz.
+* Initialization at low clock speed (400KHz max) for the 4bit interface.
+* Test with SDXC card, SD physical layer ver 1.0 compliant card and MMC card (currently supported only with SPI interface).
+* support for MMC/eMMC at 4 and 8bit bus.
+* Date/Time function for files timestamp returning real date/time.
 
 Firmware Overview
 =================
 
-<One or more paragraphs detailing the functionality of modules and apps in this repo>
+This module provides functions to initialize SD cards, read and write data.
+To enable the 4bit SD native bus interface functions it is necessary to uncomment the "//#define BUS_MODE_4BIT" in the "module_FatFs/src/diskio.h".
+Resources (ports and clock blocks) used for the interface need to be specified in either "module_sdcardSPI/SDCardHostSPI.xc" or "module_sdcard4bit/SDCardHost4bit.xc" in the initialization of the SDif structure. 
 
 Known Issues
 ============
 
-* Currently quite slow as uses 400kHz bit banged interface.
+* Initialization for the 4bit protocol not done at correct clock speed of 400KHz maximum.
 
 Required Repositories
 ================
 
-* <list of repos, likely to include xcommon if it uses the build system>
 * xcommon git\@github.com:xcore/xcommon.git
 
 Support
 =======
 
-<Description of support model>
+Issues may be submitted via the Issues tab in this github repo. Response to any issues submitted are at the discretion of the maintainers of this component.
