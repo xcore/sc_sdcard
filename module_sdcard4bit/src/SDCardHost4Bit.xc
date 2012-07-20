@@ -6,8 +6,9 @@
 typedef struct SDHostInterface
 {
   out port Clk; // a 1 bit port
-  port Cmd; // a 1 bit port
+  port Cmd; // a 1 bit port. Need an external pull-up resistor if not an XS1_G core
   port Dat; // a 4 bit port. Beware: connect D0 to PortBit3, D1 to PortBit2, D2 to PortBit1, D3 to PortBit0
+            // D0 (PortBit3) need an external pull-up resistor if not an XS1_G core
 /*
    D D C     C   D D
    a a m     l   a a
@@ -51,6 +52,8 @@ typedef unsigned char RESP[17]; // type for SD responses
 #define CRC16_POLY (0x10811 >> 1) //x^16+X^12+x^5+x^0
 
 #define CMD_BIT(Data) SDif[IfNum].Clk <: 0; SDif[IfNum].Cmd <: >> Data; SDif[IfNum].Clk <: 1;
+
+int Is_XS1_G_Core = 0;
 
 #pragma unsafe arrays
 static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int DataBlocks, BYTE buff[], RESP Resp)
@@ -97,7 +100,9 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
   i = 0;
   CMD_BIT(Crc0)
 
-  set_port_pull_up(SDif[IfNum].Cmd);
+  if(Is_XS1_G_Core) // check if an XS1-G can enable internal pull-up
+    set_port_pull_up(SDif[IfNum].Cmd); // otherwise need an external pull-up resistor for Cmd pin
+  SDif[IfNum].Cmd :> void;
   while(RespStat || DatStat)
   {
     SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; // 1 clock pulse
@@ -250,7 +255,9 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
       }
       SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: 0xF; SDif[IfNum].Clk <: 1; // end data block
 
-      set_port_pull_up(SDif[IfNum].Dat);
+      if(Is_XS1_G_Core) // check if an XS1-G can enable internal pull-up
+        set_port_pull_up(SDif[IfNum].Dat); // otherwise need an external pull-up resistor D0 (Dat3) pin
+      SDif[IfNum].Dat :> void;
       for(i = 8; i; i--) // send 8 clocks
       { SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1;}
 
@@ -288,11 +295,12 @@ DSTATUS disk_initialize(BYTE IfNum)
 
   if(IfNum >= sizeof(SDif)/sizeof(SDHostInterface)) return RES_PARERR;
 
+  read_sswitch_reg(get_core_id(), 0, i);
+  Is_XS1_G_Core = ((i & 0xFFFF) == 0x0200) ? 1 : 0; // get core type
+
   // configure ports and clock blocks
   SDif[IfNum].Cmd <: 1;
   SDif[IfNum].Dat <: 0xF;
-  set_port_pull_up(SDif[IfNum].Cmd);
-  set_port_pull_up(SDif[IfNum].Dat);
   SDif[IfNum].Clk <: 1 @ i;
   for(BlockLen = 74; BlockLen; BlockLen--)
   { // send 74 clocks
@@ -361,7 +369,7 @@ DRESULT disk_read(BYTE IfNum, BYTE buff[], DWORD sector, BYTE count)
 }
 
 #pragma unsafe arrays
-DRESULT disk_write(BYTE IfNum, BYTE buff[],DWORD sector, BYTE count)
+DRESULT disk_write(BYTE IfNum, const BYTE buff[],DWORD sector, BYTE count)
 {
   RESP Resp;
   unsigned char DummyData[1];
@@ -370,11 +378,11 @@ DRESULT disk_write(BYTE IfNum, BYTE buff[],DWORD sector, BYTE count)
   if(1 < count)
   { // multiblock write
     //if(SendCmd(SDif, 23, NumBlocks, R1, 0, DummyData, Resp)) return 0; // set foreseen multiple block read. Remarked because only optionally supported by cards
-    if(SendCmd(IfNum, 25, SDif[IfNum].Ccs ? sector : 512 * sector, R1, -count, buff, Resp)) return RES_ERROR; // multiblock write
+    if(SendCmd(IfNum, 25, SDif[IfNum].Ccs ? sector : 512 * sector, R1, -count, (buff, BYTE[]), Resp)) return RES_ERROR; // multiblock write
     if(SendCmd(IfNum, 12, 0, R1B, 0, DummyData, Resp)) return RES_ERROR; // stop multi-block write. (using stop command instead of cmd23)
   }
   else
-    if(SendCmd(IfNum, 24, SDif[IfNum].Ccs ? sector : 512 * sector, R1, -1, buff, Resp)) return RES_ERROR; // single block write
+    if(SendCmd(IfNum, 24, SDif[IfNum].Ccs ? sector : 512 * sector, R1, -1, (buff, BYTE[]), Resp)) return RES_ERROR; // single block write
   return RES_OK;
 }
 

@@ -33,6 +33,8 @@ Firmware Overview
 This module provides functions to initialize SD cards, read and write data.
 To enable the 4bit SD native bus interface functions it is necessary to uncomment the "//#define BUS_MODE_4BIT" in the "module_FatFs/src/diskio.h".
 Resources (ports and clock blocks) used for the interface need to be specified in either "module_sdcardSPI/SDCardHostSPI.xc" or "module_sdcard4bit/SDCardHost4bit.xc" in the initialization of the SDif structure. 
+If you run it in a core other than XS1_G you need pull-up resistor for miso line (if in spi mode) or
+ Cmd line and D0(=Dat por bit 3) line (if in 4bit bus mode)
 
 Known Issues
 ============

@@ -16,7 +16,7 @@
 
 FATFS Fatfs;            /* File system object */
 FIL Fil;                /* File object */
-BYTE Buff[512*50];      /* File read buffer (10 SD card blocks to let bultiblock operations (if file not fragmented) */
+BYTE Buff[512*40];      /* File read buffer (40 SD card blocks to let multiblock operations (if file not fragmented) */
 
 void die(FRESULT rc ) /* Stop with dying message */
 {

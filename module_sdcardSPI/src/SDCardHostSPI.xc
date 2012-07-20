@@ -15,7 +15,7 @@ typedef struct SDHostInterface
   out port cs; // a 1 bit port
   out buffered port:32 sclk; // a 1 bit port
   out buffered port:32 mosi; // a 1 bit port
-  in buffered port:32 miso; // a 1 bit port
+  in buffered port:32 miso; // a 1 bit port. Need an external pull-up resistor if not an XS1_G core
 /*
      C M     S   M
      s o     c   i
@@ -45,13 +45,17 @@ static SDHostInterface SDif[] = // LIST HERE THE PORTS USED FOR THE INTERFACES
 
 void init_port(BYTE drv)
 {
+  unsigned int i;
+
   // configure ports and clock blocks
   configure_clock_ref(SDif[drv].ClkBlk1, 64);  // about 800KHz vector rate
   configure_out_port(SDif[drv].sclk, SDif[drv].ClkBlk1, 1);
   configure_clock_src(SDif[drv].ClkBlk2, SDif[drv].sclk);
   configure_out_port(SDif[drv].mosi, SDif[drv].ClkBlk2, 1);
   configure_in_port(SDif[drv].miso, SDif[drv].ClkBlk2);
-  set_port_pull_up(SDif[drv].miso);
+  read_sswitch_reg(get_core_id(), 0, i); // get core type
+  if((i & 0xFFFF) == 0x0200)
+    set_port_pull_up(SDif[drv].miso); // if an XS1_G core can enable internal pull-up
   SDif[drv].cs <: 1;
   start_clock(SDif[drv].ClkBlk1);
   start_clock(SDif[drv].ClkBlk2);
