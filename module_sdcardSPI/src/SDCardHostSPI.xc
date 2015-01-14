@@ -401,32 +401,32 @@ typedef unsigned char DATABLOCK[512];
 /*-----------------------------------------------------------------------*/
 #pragma unsafe arrays
 DRESULT disk_read (
-  BYTE drv,      /* Physical drive nmuber (0) */
+  BYTE pdrv,      /* Physical drive nmuber (0) */
   BYTE buff[],      /* Pointer to the data buffer to store read data */
   DWORD sector,    /* Start sector number (LBA) */
-  BYTE count      /* Sector count (1..128) */
+  UINT count      /* Sector count (1..128) */
 )
 {
   BYTE BlockCount = 0;
 
-  if (disk_status(drv) & STA_NOINIT) return RES_NOTRDY;
+  if (disk_status(pdrv) & STA_NOINIT) return RES_NOTRDY;
   if (!count) return RES_PARERR;
-  if (!(SDif[drv].CardType & CT_BLOCK)) sector *= 512;  /* Convert LBA to byte address if needed */
+  if (!(SDif[pdrv].CardType & CT_BLOCK)) sector *= 512;  /* Convert LBA to byte address if needed */
 
   if (count == 1) {  /* Single block read */
-    if ((send_cmd(drv, CMD17, sector) == 0)  /* READ_SINGLE_BLOCK */
-      && rcvr_datablock(drv, buff, 512))
+    if ((send_cmd(pdrv, CMD17, sector) == 0)  /* READ_SINGLE_BLOCK */
+      && rcvr_datablock(pdrv, buff, 512))
       count = 0;
   }
   else {        /* Multiple block read */
-    if (send_cmd(drv, CMD18, sector) == 0) {  /* READ_MULTIPLE_BLOCK */
+    if (send_cmd(pdrv, CMD18, sector) == 0) {  /* READ_MULTIPLE_BLOCK */
       do {
-        if (!rcvr_datablock(drv, (buff, DATABLOCK[])[BlockCount++], 512)) break;
+        if (!rcvr_datablock(pdrv, (buff, DATABLOCK[])[BlockCount++], 512)) break;
       } while (--count);
-      send_cmd(drv, CMD12, 0);        /* STOP_TRANSMISSION */
+      send_cmd(pdrv, CMD12, 0);        /* STOP_TRANSMISSION */
     }
   }
-  deselect(drv);
+  deselect(pdrv);
 
   return count ? RES_ERROR : RES_OK;
 }
@@ -438,34 +438,34 @@ DRESULT disk_read (
 /*-----------------------------------------------------------------------*/
 #pragma unsafe arrays
 DRESULT disk_write (
-  BYTE drv,      /* Physical drive nmuber (0) */
+  BYTE pdrv,      /* Physical drive nmuber (0) */
   const BYTE buff[],  /* Pointer to the data to be written */
   DWORD sector,    /* Start sector number (LBA) */
-  BYTE count      /* Sector count (1..128) */
+  UINT count      /* Sector count (1..128) */
 )
 {
   BYTE BlockCount = 0;
 
-  if (disk_status(drv) & STA_NOINIT) return RES_NOTRDY;
+  if (disk_status(pdrv) & STA_NOINIT) return RES_NOTRDY;
   if (!count) return RES_PARERR;
-  if (!(SDif[drv].CardType & CT_BLOCK)) sector *= 512;  /* Convert LBA to byte address if needed */
+  if (!(SDif[pdrv].CardType & CT_BLOCK)) sector *= 512;  /* Convert LBA to byte address if needed */
 
   if (count == 1) {  /* Single block write */
-    if ((send_cmd(drv, CMD24, sector) == 0)  /* WRITE_BLOCK */
-      && xmit_datablock(drv, buff, 0xFE))
+    if ((send_cmd(pdrv, CMD24, sector) == 0)  /* WRITE_BLOCK */
+      && xmit_datablock(pdrv, buff, 0xFE))
       count = 0;
   }
   else {        /* Multiple block write */
-    if (SDif[drv].CardType & CT_SDC) send_cmd(drv, ACMD23, count);
-    if (send_cmd(drv, CMD25, sector) == 0) {  /* WRITE_MULTIPLE_BLOCK */
+    if (SDif[pdrv].CardType & CT_SDC) send_cmd(pdrv, ACMD23, count);
+    if (send_cmd(pdrv, CMD25, sector) == 0) {  /* WRITE_MULTIPLE_BLOCK */
       do {
-        if (!xmit_datablock(drv, (buff, DATABLOCK[])[BlockCount++], 0xFC)) break;
+        if (!xmit_datablock(pdrv, (buff, DATABLOCK[])[BlockCount++], 0xFC)) break;
       } while (--count);
-      if (!xmit_datablock(drv, null, 0xFD))  /* STOP_TRAN token */
+      if (!xmit_datablock(pdrv, null, 0xFD))  /* STOP_TRAN token */
         count = 1;
     }
   }
-  deselect(drv);
+  deselect(pdrv);
 
   return count ? RES_ERROR : RES_OK;
 }

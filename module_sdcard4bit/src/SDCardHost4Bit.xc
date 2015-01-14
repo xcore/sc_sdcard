@@ -249,7 +249,7 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
       crc32(Crc3, 0, CRC16_POLY); // flush crc engine
       for(i = 16; i; i--)
       {
-        Dat = Crc3 & 1 | (Crc2 & 1) << 1 | (Crc1 & 1) << 2 | (Crc0 & 1) << 3;
+        Dat = (Crc3 & 1) | ((Crc2 & 1) << 1) | ((Crc1 & 1) << 2) | ((Crc0 & 1) << 3);
         SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: Dat; SDif[IfNum].Clk <: 1;
         Crc3 >>= 1; Crc2 >>= 1; Crc1 >>= 1; Crc0 >>= 1;
       }
@@ -295,7 +295,7 @@ DSTATUS disk_initialize(BYTE IfNum)
 
   if(IfNum >= sizeof(SDif)/sizeof(SDHostInterface)) return RES_PARERR;
 
-  read_sswitch_reg(get_core_id(), 0, i);
+  read_sswitch_reg(get_local_tile_id(), 0, i);
   Is_XS1_G_Core = ((i & 0xFFFF) == 0x0200) ? 1 : 0; // get core type
 
   // configure ports and clock blocks
@@ -351,7 +351,7 @@ DSTATUS disk_initialize(BYTE IfNum)
 }
 
 #pragma unsafe arrays
-DRESULT disk_read(BYTE IfNum, BYTE buff[], DWORD sector, BYTE count)
+DRESULT disk_read(BYTE IfNum, BYTE buff[], DWORD sector, UINT count)
 {
   RESP Resp;
   unsigned char DummyData[1];
@@ -369,7 +369,7 @@ DRESULT disk_read(BYTE IfNum, BYTE buff[], DWORD sector, BYTE count)
 }
 
 #pragma unsafe arrays
-DRESULT disk_write(BYTE IfNum, const BYTE buff[],DWORD sector, BYTE count)
+DRESULT disk_write(BYTE IfNum, const BYTE buff[],DWORD sector, UINT count)
 {
   RESP Resp;
   unsigned char DummyData[1];
@@ -388,7 +388,7 @@ DRESULT disk_write(BYTE IfNum, const BYTE buff[],DWORD sector, BYTE count)
 
 DSTATUS disk_status(BYTE IfNum)
 {
-  DSTATUS s;
+  //DSTATUS s;
   unsigned char DummyData[1];
   RESP Resp;
 
