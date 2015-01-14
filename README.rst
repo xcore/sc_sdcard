@@ -35,6 +35,24 @@ To enable the 4bit SD native bus interface functions it is necessary to uncommen
 Resources (ports and clock blocks) used for the interface need to be specified in either "module_sdcardSPI/SDCardHostSPI.xc" or "module_sdcard4bit/SDCardHost4bit.xc" in the initialization of the SDif structure. 
 If you run it in a core other than XS1_G you need pull-up resistor for miso line (if in spi mode) or Cmd line and D0(=Dat port bit 3) line (if in 4bit bus mode)
 
+### Benchmark
+Using Micro SDHC Class 10 (unknown brand):
+* SPI mode, -O0 (20480 bytes write/read)
+	* Write speed: 1341KByte/s
+	* Read speed: 288KByte/s
+* SPI mode, -O3 (20480 bytes write/read)
+	* Write speed: 1416KByte/s
+	* Read speed: 312KByte/s
+* 4-bit mode, -O0 or -O3, no assembly code (20480 bytes write/read)
+	* Write speed: 782KByte/s
+	* Read speed: 1660KByte/s
+* 4-bit mode, -O0, with assembly code (20480 bytes write/read)
+	* Write speed: 2288KBytes/s
+	* Read speed: 2860KBytes/s
+* 4-bit mode, -O3, with assembly code (20480 bytes write/read)
+	* Write speed: 3740KBytes/s
+	* Read speed: 3100KBytes/s
+
 Known Issues
 ============
 

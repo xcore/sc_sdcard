@@ -36,7 +36,7 @@ static SDHostInterface SDif[] = // LIST HERE THE PORTS USED FOR THE INTERFACES
 /***************************/
 
 typedef enum RespType
-{R0, R1, R1B, R2, R3, R6, R7} RESP_TYPE;
+{R0, R1, R1B, R6, R7, R2, R3} RESP_TYPE;
 
 typedef unsigned char RESP[17]; // type for SD responses
 
@@ -51,61 +51,75 @@ typedef unsigned char RESP[17]; // type for SD responses
 #define CRC7_POLY (0x91 >> 1) //x^7+X^3+x^0
 #define CRC16_POLY (0x10811 >> 1) //x^16+X^12+x^5+x^0
 
-#define CMD_BIT(Data) SDif[IfNum].Clk <: 0; SDif[IfNum].Cmd <: >> Data; SDif[IfNum].Clk <: 1;
+void pulse_clock_8(out port Clk);
+void clock_outsh_data(unsigned int &data, out port Clk, port Cmd);
+void clock_outsh_data_8(unsigned int &data, out port Clk, port Dat);
+void clock_in_data_512(unsigned int &data, out port Clk, port Dat, unsigned int &byteCount, unsigned char buff[]);
+void send_crc(out port Clk, port Dat, unsigned int crc0, unsigned int crc1, unsigned int crc2, unsigned int crc3);
+
+#define CMD_BIT(data) clock_outsh_data(data, SDif[IfNum].Clk, SDif[IfNum].Cmd)
+
+#define CLK_PULSE() \
+    asm("ldc r11,0x0 \n" \
+        "out res[%0],r11  \n" \
+        "ldc r11,0x1 \n" \
+        "out res[%0],r11  \n" \
+        ::"r"(SDif[IfNum].Clk) : "r11")
+
 
 int Is_XS1_G_Core = 0;
 
 #pragma unsafe arrays
-static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int DataBlocks, BYTE buff[], RESP Resp)
+static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD arg, RESP_TYPE RespType, int DataBlocks, BYTE buff[], RESP Resp)
 { //01CMD[6]ARG[32]CRC[7]1
   unsigned int i, j, Crc0 = 0, Crc1, Crc2, Crc3;
   unsigned int D0, D1, D2, D3;
   unsigned int RespStat, RespBitLen, RespBitCount, RespByteCount;
-  unsigned int DatStat, DatBytesLen, DatByteCount, Dat;
+  unsigned int DatStat, DatBytesLen, DatByteCount, Dat, Arg = arg;
   unsigned char R;
 
   set_port_drive(SDif[IfNum].Cmd);
   i = bitrev(Cmd | 0b01000000) >> 24; // build first byte of command: start bit, host sending bit, Cmd
   crc8shr(Crc0, i, CRC7_POLY);
 
-  CMD_BIT(i) // send first byte of command
+  CMD_BIT(i); // send first byte of command
   Arg = bitrev(Arg);
-  CMD_BIT(i)
+  CMD_BIT(i);
   crc32(Crc0, Arg, CRC7_POLY);
-  CMD_BIT(i)
+  CMD_BIT(i);
   crc32(Crc0, 0, CRC7_POLY); // flush crc engine
-  CMD_BIT(i)
+  CMD_BIT(i);
   Crc0 |= 0x80; // build last byte of command: crc7 and stop bit
-  CMD_BIT(i)
+  CMD_BIT(i);
   RespStat = ((R0 == RespType) ? 0 : RESP_WAITING_START_BIT);
-  CMD_BIT(i)
+  CMD_BIT(i);
   RespBitLen = (R2 == RespType) ? 136 : 48;
-  CMD_BIT(i)
+  CMD_BIT(i);
   RespBitCount = 0;
-  CMD_BIT(i)
-  for(i = 32; i; i--) { CMD_BIT(Arg) } // send arg
-  CMD_BIT(Crc0) // send CRC7 and stop bit
+  CMD_BIT(i);
+  for(i = 32; i; i--) { CMD_BIT(Arg); } // send arg
+  CMD_BIT(Crc0); // send CRC7 and stop bit
   RespByteCount = 0;
-  CMD_BIT(Crc0)
+  CMD_BIT(Crc0);
   Dat = 0xFFFFFFFF;
-  CMD_BIT(Crc0)
+  CMD_BIT(Crc0);
   R = 0xFF;
-  CMD_BIT(Crc0)
+  CMD_BIT(Crc0);
   DatStat = (0 < DataBlocks) ? DAT_WAITING_START_NIBBLE : 0;
-  CMD_BIT(Crc0)
+  CMD_BIT(Crc0);
   DatBytesLen = DataBlocks * 512;
-  CMD_BIT(Crc0)
+  CMD_BIT(Crc0);
   DatByteCount = 0;
-  CMD_BIT(Crc0)
+  CMD_BIT(Crc0);
   i = 0;
-  CMD_BIT(Crc0)
+  CMD_BIT(Crc0);
 
   if(Is_XS1_G_Core) // check if an XS1-G can enable internal pull-up
     set_port_pull_up(SDif[IfNum].Cmd); // otherwise need an external pull-up resistor for Cmd pin
   SDif[IfNum].Cmd :> void;
   while(RespStat || DatStat)
   {
-    SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; // 1 clock pulse
+    CLK_PULSE(); // 1 clock pulse
     i++;
     switch(RespStat)
     {
@@ -144,14 +158,7 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
         buff[DatByteCount++] = bitrev(Dat);
         if(!RespStat) // if response received... (can continue just sampling dat lines)
         {
-          while(DatByteCount % 512)
-          { /* todo: doing this stuff with assembly would highly increase performance */
-            SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; // 1 clock pulse
-            SDif[IfNum].Dat :> >> Dat;
-            SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; // 1 clock pulse
-            SDif[IfNum].Dat :> >> Dat;
-            buff[DatByteCount++] = bitrev(Dat);
-          }
+          clock_in_data_512(Dat, SDif[IfNum].Clk, SDif[IfNum].Dat, DatByteCount, buff);
           j = 17; DatStat = DAT_RECEIVING_CRC; // next state
           break;
         }
@@ -206,8 +213,7 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
       break;
   }
 
-  for(i = 8; i; i--) // send 8 clocks
-  { SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; }
+  pulse_clock_8(SDif[IfNum].Clk);   // send 8 clocks
 
   if(0 > DataBlocks) // a write operation
   {
@@ -238,8 +244,7 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
         D0 |= D0 >> 3; D0 &= 0x03030303; D0 |= D0 >> 6; D0 |= D0 >> 12;
         crc8shr(Crc0, D0, CRC16_POLY);
 
-        for(i = 8; i; i--) // send 8 nibbles
-        { SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: >> Dat; SDif[IfNum].Clk <: 1; } // todo: do this in assembly
+        clock_outsh_data_8(Dat, SDif[IfNum].Clk, SDif[IfNum].Dat);
       }
 
       // write CRCs, end nibble and wait busy
@@ -247,24 +252,20 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
       crc32(Crc1, 0, CRC16_POLY); // flush crc engine
       crc32(Crc2, 0, CRC16_POLY); // flush crc engine
       crc32(Crc3, 0, CRC16_POLY); // flush crc engine
-      for(i = 16; i; i--)
-      {
-        Dat = (Crc3 & 1) | ((Crc2 & 1) << 1) | ((Crc1 & 1) << 2) | ((Crc0 & 1) << 3);
-        SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: Dat; SDif[IfNum].Clk <: 1;
-        Crc3 >>= 1; Crc2 >>= 1; Crc1 >>= 1; Crc0 >>= 1;
-      }
-      SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: 0xF; SDif[IfNum].Clk <: 1; // end data block
+
+      send_crc(SDif[IfNum].Clk, SDif[IfNum].Dat, Crc0, Crc1, Crc2, Crc3);
 
       if(Is_XS1_G_Core) // check if an XS1-G can enable internal pull-up
         set_port_pull_up(SDif[IfNum].Dat); // otherwise need an external pull-up resistor D0 (Dat3) pin
       SDif[IfNum].Dat :> void;
-      for(i = 8; i; i--) // send 8 clocks
-      { SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1;}
+
+      pulse_clock_8(SDif[IfNum].Clk);   // send 8 clocks
 
       i = 4000000;
       do // wait busy
       {
-        SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; SDif[IfNum].Dat :> Dat;
+        CLK_PULSE();
+        SDif[IfNum].Dat :> Dat;
         if(!i--) return RES_ERROR; // busy timeout
       }
       while(!(Dat & 0x8));
@@ -277,7 +278,8 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
     i = 4000000;
     do // wait busy
     {
-      SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; SDif[IfNum].Dat :> Dat;
+      CLK_PULSE();
+      SDif[IfNum].Dat :> Dat;
       if(!i--) return RES_ERROR; // busy timeout
     }
     while(!(Dat & 0x8));
