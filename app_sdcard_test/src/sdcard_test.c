@@ -34,7 +34,7 @@ int main(void)
 
   for( i = 0; i < sizeof(Buff); i++) Buff[i] = i + i / 512; // fill the buffer with some data
 
-  f_mount(0, &Fatfs);             /* Register volume work area (never fails) for SD host interface #0 */
+  f_mount(&Fatfs, "", 0);             /* Register volume work area (never fails) for SD host interface #0 */
   {
     FATFS *fs;
     DWORD fre_clust, fre_sect, tot_sect;
