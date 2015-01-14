@@ -53,7 +53,7 @@ void init_port(BYTE drv)
   configure_clock_src(SDif[drv].ClkBlk2, SDif[drv].sclk);
   configure_out_port(SDif[drv].mosi, SDif[drv].ClkBlk2, 1);
   configure_in_port(SDif[drv].miso, SDif[drv].ClkBlk2);
-  read_sswitch_reg(get_core_id(), 0, i); // get core type
+  read_sswitch_reg(get_local_tile_id(), 0, i); // get core type
   if((i & 0xFFFF) == 0x0200)
     set_port_pull_up(SDif[drv].miso); // if an XS1_G core can enable internal pull-up
   SDif[drv].cs <: 1;
