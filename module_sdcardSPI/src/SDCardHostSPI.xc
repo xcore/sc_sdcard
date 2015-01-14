@@ -237,7 +237,7 @@ int rcvr_datablock (BYTE drv,  /* 1:OK, 0:Failed */
 #pragma unsafe arrays
 static
 int xmit_datablock (BYTE drv,  /* 1:OK, 0:Failed */
-  const BYTE ?buff[],  /* 512 byte data block to be transmitted */
+  const BYTE (&?buff)[],  /* 512 byte data block to be transmitted */
   BYTE token      /* Data/Stop token */
 )
 {
@@ -483,7 +483,7 @@ DRESULT disk_ioctl (
 )
 {
   DRESULT res;
-  BYTE n, i, csd[16];
+  BYTE n, csd[16];
   WORD cs;
 
 
