@@ -1,0 +1,27 @@
+Starting with BUS_MODE_4BIT
+Getting free cluster info ...
+15743968 KB total drive space.
+15748096 KB available.
+
+Deleting file Data.bin if existing...deleted.
+
+Creating a new file Data.bin...done.
+
+Writing data to the file...
+File created in 256 blocks of size 16384 bytes: Write rate min: 44, max: 3070, avg: 2659 Kbytes/sec
+
+Closing the file...done.
+
+Opening an existing file: Data.bin...done.
+
+Reading file content...done.
+File has 256 blocks of size 16384 bytes: Read rate min: 3724, max: 4424, avg: 4398 Kbytes/sec
+
+Closing the file...done.
+
+Open root directory.
+
+Directory listing...
+ 4194304  DATA.BIN
+
+Test completed.
