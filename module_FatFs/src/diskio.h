@@ -4,7 +4,7 @@
 
 #ifndef _DISKIO
 
-//#define BUS_MODE_4BIT
+#define BUS_MODE_4BIT
 
 #define _READONLY       0       /* 1: Remove write functions */
 #define _USE_IOCTL      1       /* 1: Use disk_ioctl fucntion */
