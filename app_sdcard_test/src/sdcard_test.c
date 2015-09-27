@@ -13,10 +13,17 @@
 #include <stdio.h> /* for the printf function */
 #include "ff.h"    /* file system routines */
 #include "timing.h"
-
+#include "diskio.h"     /* To get the bus mode definition for debugging */
+#include "string.h"     /* To get memset function */
 FATFS Fatfs;            /* File system object */
 FIL Fil;                /* File object */
-BYTE Buff[512*40];      /* File read buffer (40 SD card blocks to let multiblock operations (if file not fragmented) */
+BYTE Buff[512*32];      /* File read buffer (at least 32 SD card blocks to let multiblock operations (if file not fragmented) */
+#define max(a,b) ((a)>(b))?(a):(b)
+#define min(a,b) ((a)<(b))?(a):(b)
+
+const unsigned nRuns = 256;               // Run each block test consecutively n times.  Note size limits differ in Debug mode
+const unsigned detailedPrintWrite = 0;    // Control whether detailed results are printed or just summary
+const unsigned detailedPrintRead = 0;
 
 void die(FRESULT rc ) /* Stop with dying message */
 {
@@ -29,8 +36,16 @@ int main(void)
   FRESULT rc;                     /* Result code */
   DIR dir;                        /* Directory object */
   FILINFO fno;                    /* File information object */
-  UINT bw, br, i;
-  unsigned int T;
+
+  // Stats collection
+  UINT read_time[nRuns], write_time[nRuns];
+  UINT bw[nRuns], br[nRuns], i, T;
+
+#ifdef BUS_MODE_4BIT
+  printf("Starting with BUS_MODE_4BIT\n");
+#else
+  printf("Starting with SPI 1 bit mode\n");
+#endif
 
   for( i = 0; i < sizeof(Buff); i++) Buff[i] = i + i / 512; // fill the buffer with some data
 
@@ -40,6 +55,7 @@ int main(void)
     DWORD fre_clust, fre_sect, tot_sect;
 
     /* Get volume information and free clusters of drive 0 */
+    printf("Getting free cluster info ...\n");
     rc = f_getfree("0:", &fre_clust, &fs);
     if(rc) die(rc);
 
@@ -67,13 +83,46 @@ int main(void)
   if(rc) die(rc);
   printf("done.\n");
 
-  printf("\nWriting data to the file...");
-  T = get_time();
-  rc = f_write(&Fil, Buff, sizeof(Buff), &bw);
-  T = get_time() - T;
-  if(rc) die(rc);
-  printf("%d bytes written. Write rate: %dKBytes/Sec\n", bw, (bw*100000)/T);
+  // Just give maxes and mins as quicker printing
+  unsigned bw_max = 0;
+  unsigned bw_min = 9999999;
+  unsigned bw_sum = 0;
 
+  unsigned br_max = 0;
+  unsigned br_min = 9999999;
+  unsigned br_sum = 0;
+
+  unsigned this_b;
+  printf("\nWriting data to the file...\n");
+  for(i=0; i<nRuns; i++) {
+	T = get_time();
+	rc = f_write(&Fil, Buff, sizeof(Buff), &bw[i]);
+    write_time[i] = get_time() - T;
+	if(rc) die(rc);
+  }
+
+  // Print separately from the actual timing loop, to avoid printf slowing down and affecting results
+  for(i=0; i<nRuns; i++) {
+      this_b = (bw[i]*100000)/write_time[i];
+      // Collect stats
+      bw_min = min(bw_min, this_b);
+      bw_max = max(bw_max, this_b);
+      bw_sum += this_b;
+
+      // Check size of each transaction
+      if(bw[i]!=sizeof(Buff)){
+          printf("Run %d: error - %8u bytes written\n", i, bw[i]);
+          die(0);
+      }
+  }
+  printf("File created in %d blocks of size %d bytes: Write rate min: %u, max: %u, avg: %u Kbytes/sec\n", i, sizeof(Buff), bw_min, bw_max, bw_sum/i);
+
+  // Dump out detailed results
+  if(detailedPrintWrite) {
+    for(i=0; i<nRuns; i++) {
+      printf("Run %4d: %u bytes written. Write rate: %u KBytes/Sec\n", i, bw[i], (bw[i]*100000)/write_time[i]);
+    }
+  }
   printf("\nClosing the file...");
   rc = f_close(&Fil);
   if(rc) die(rc);
@@ -86,12 +135,47 @@ int main(void)
   if(rc) die(rc);
   printf("done.\n");
 
+  int j;
   printf("\nReading file content...");
-  T = get_time();
-  rc = f_read(&Fil, Buff, sizeof(Buff), &br);
-  T = get_time() - T;
-  if(rc) die(rc);
-  printf("%d bytes read. Read rate: %dKBytes/Sec\n", br, (br*100000)/T);
+  for(i=0; i<nRuns; i++) {
+    memset(Buff, 0, sizeof(Buff));
+	T = get_time();
+	rc = f_read(&Fil, Buff, sizeof(Buff), &br[i]);
+	read_time[i] = get_time() - T;
+	if(rc) die(rc);
+
+	// Check the read back contents of the buffer
+	for(j=0; j<sizeof(Buff); j++) {
+		if(Buff[j] != (BYTE)(j + j / 512)) {
+			printf("\nError on run %d, file offset %04x = %02x\n", i, j, Buff[j]);
+			die(0);
+		}
+	}
+  }
+  printf("done.\n");
+
+  // Print separately from the actual timing loop, to avoid printf slowing down and affecting results
+   for(i=0; i<nRuns; i++) {
+       this_b = (br[i]*100000)/read_time[i];
+       // Collect stats
+       br_min = min(br_min, this_b);
+       br_max = max(br_max, this_b);
+       br_sum += this_b;
+
+       // Check size of each transaction
+       if(br[i]!=sizeof(Buff)){
+           printf("Run %d: error - %8u bytes read\n", i, br[i]);
+           die(0);
+       }
+   }
+   printf("File has %d blocks of size %d bytes: Read rate min: %u, max: %u, avg: %u Kbytes/sec\n", i, sizeof(Buff), br_min, br_max, br_sum/i);
+
+   // Dump out detailed results (read)
+   if(detailedPrintRead) {
+	for(i=0; i<nRuns; i++) {
+       printf("Run %4d: %u bytes read. Read rate: %u KBytes/Sec\n", i, br[i], (br[i]*100000)/read_time[i]);
+	}
+   }
 
   printf("\nClosing the file...");
   rc = f_close(&Fil);
@@ -113,7 +197,7 @@ int main(void)
       printf("   <dir>  %s\n", fno.fname);
     else
     {
-      printf("%8d  %s\n", fno.fsize, fno.fname);
+      printf("%8lu  %s\n", fno.fsize, fno.fname);
     }
   }
   if(rc) die(rc);
