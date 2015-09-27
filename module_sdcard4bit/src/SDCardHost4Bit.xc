@@ -393,7 +393,7 @@ DSTATUS disk_initialize(BYTE IfNum)
 
   if(IfNum >= sizeof(SDif)/sizeof(SDHostInterface)) return RES_PARERR;
 
-  read_sswitch_reg(get_core_id(), 0, i);
+  read_sswitch_reg(get_local_tile_id(), 0, i);
   Is_XS1_G_Core = ((i & 0xFFFF) == 0x0200) ? 1 : 0; // get core type
 
   // configure ports and clock blocks
