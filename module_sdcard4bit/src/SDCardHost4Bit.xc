@@ -2,6 +2,8 @@
 #ifdef BUS_MODE_4BIT
 #include <xs1.h>
 #include <xclib.h>
+#include <stdint.h>                 // Standard sized integer types
+#include "timing.h"
 
 typedef struct SDHostInterface
 {
@@ -28,7 +30,8 @@ typedef struct SDHostInterface
   unsigned long BlockNr; // number of 512 bytes blocks. Returned by initialization.
 } SDHostInterface;
 
-static SDHostInterface SDif[] = // LIST HERE THE PORTS USED FOR THE INTERFACES
+static SDHostInterface SDif[] = 
+// LIST HERE THE PORTS USED FOR THE INTERFACES
 //       CLK,         CMD,     DAT3..0,
 {XS1_PORT_1M, XS1_PORT_1N, XS1_PORT_4E, 0, 0, 0}; // ports used for interface #0
 //{XS1_PORT_1O, XS1_PORT_1P, XS1_PORT_4F, 0, 0, 0}; // ports used for interface #1
@@ -51,9 +54,100 @@ typedef unsigned char RESP[17]; // type for SD responses
 #define CRC7_POLY (0x91 >> 1) //x^7+X^3+x^0
 #define CRC16_POLY (0x10811 >> 1) //x^16+X^12+x^5+x^0
 
-#define CMD_BIT(Data) SDif[IfNum].Clk <: 0; SDif[IfNum].Cmd <: >> Data; SDif[IfNum].Clk <: 1;
+// Temp - add no-ops
+#define NOP_PAUSE_SETUP asm("nop");asm("nop");
+#define NOP_PAUSE_HOLD  asm("nop");asm("nop");
+
+// Writes should need shorter setup time and longer hold time
+#define NOP_PAUSE_WR_SETUP asm("nop");
+#define NOP_PAUSE_WR_HOLD  asm("nop");asm("nop");
+
+// Commands go from XMOS -> SDcard therefore use write timings
+#define CMD_BIT(Data) SDif[IfNum].Cmd <: >> Data;NOP_PAUSE_WR_SETUP; SDif[IfNum].Clk <: 1; NOP_PAUSE_WR_HOLD; SDif[IfNum].Clk <: 0;
 
 int Is_XS1_G_Core = 0;
+
+void ToggleClock(int count, out port clk)
+{
+  // Use timer instead of NOPs, as it allows co-op multitasking.
+  // Doing this part somewhat slowly has little effect on the overall throughput
+  //Clock idle low
+  timer t;
+  uint32_t time;
+  int clkState = 0;
+  const uint32_t clkPeriod = 8;           // Units of 10ns. this is about as fast as a StartKit can go in this loop
+
+  t :> time;                              // get the initial timer value
+  count<<=1;                              // both edges
+  while(count--) {                        // send 'count' clock toggles
+    select {
+      case t when timerafter(time) :> void:     // perform periodic task
+        clkState = !clkState;
+        clk <: clkState;
+        time += clkPeriod;
+        break;
+    }
+  }
+}
+
+
+// Wait for in port p (masked with bitmask) to give chkval, while toggling clk
+unsigned WaitForTimed(in port p, unsigned bitmask, unsigned chkval, out port clk)
+{
+  unsigned val;
+  uint32_t start_t, time;
+  timer t;
+  int clkState = 0;
+  int i;
+  const uint32_t clkHighPeriod = 32;
+  const uint32_t nFastClks = 64;            // try this number of fast clocks first, then go slow (as the card is taking a while anyway)
+  const uint32_t clkLowPeriodFast = 32;     // Units of 10ns
+  const uint32_t clkLowPeriodSlow = 1000;   // Units of 10ns
+  const uint32_t MaxSlowClks = 100000000/clkLowPeriodSlow;   // Wait a maximum of 1 second in slow mode
+
+  t :> time;                            // get the initial timer value
+  start_t = time;                       //todo: temp
+
+  for(i=0; i<MaxSlowClks;i++)
+  {
+    select {
+      case t when timerafter(time) :> void:   // perform periodic task
+        if(clkState)
+        {
+          // If the clock is currently high, then the in port will have settled and we can read it
+          p :> val;
+          clkState=0;                          // must return clock to low (idle) again
+          clk <: clkState;
+          if( (val & bitmask) == chkval)
+          {
+            // RecordTiming(get_time()-start_t);
+            return val;                       // Got the expected response
+          }
+          else
+          {
+            // try n fast periods first, then slow down
+            // time += (i<nFastClks)? clkLowPeriodFast: clkLowPeriodSlow;
+            if(i<nFastClks)
+            {
+              time += clkLowPeriodFast;
+            }
+            else
+            {
+              time += clkLowPeriodSlow;
+            }
+          }
+        }
+        else
+        {
+          clkState = 1;
+          clk <: clkState;
+          time += clkHighPeriod;
+        }
+        break;
+    }
+  }
+  return 0;                                 // Error - timeout
+}
 
 #pragma unsafe arrays
 static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int DataBlocks, BYTE buff[], RESP Resp)
@@ -67,6 +161,8 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
   set_port_drive(SDif[IfNum].Cmd);
   i = bitrev(Cmd | 0b01000000) >> 24; // build first byte of command: start bit, host sending bit, Cmd
   crc8shr(Crc0, i, CRC7_POLY);
+
+  SDif[IfNum].Clk <: 0;                 // Clock is idle low, so begin in that state
 
   CMD_BIT(i) // send first byte of command
   Arg = bitrev(Arg);
@@ -105,12 +201,15 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
   SDif[IfNum].Cmd :> void;
   while(RespStat || DatStat)
   {
-    SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; // 1 clock pulse
+    // Add no-ops to allow setup and hold times
+    SDif[IfNum].Clk <: 1; NOP_PAUSE_HOLD; // 1 clock pulse
+    // We  read both R and Dat, we'll use one or the other below
+    SDif[IfNum].Cmd :> >> R; SDif[IfNum].Dat :> >> Dat; SDif[IfNum].Clk <: 0;      //Clock back to idle
     i++;
+	
     switch(RespStat)
     {
       case RESP_WAITING_START_BIT:
-        SDif[IfNum].Cmd :> >> R;
         if(0xFF == R)
         {
           if(4000000 == i) return RES_ERROR; // busy timeout
@@ -120,7 +219,6 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
         RespStat = RESP_RECEIVING_BITS; // next state
         break;
       case RESP_RECEIVING_BITS:
-        SDif[IfNum].Cmd :> >> R;
         if(++RespBitCount % 8) break;
         if(RespBitCount == RespBitLen)
           RespStat = 0;
@@ -131,27 +229,28 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
     switch(DatStat)
     {
       case DAT_WAITING_START_NIBBLE:
-        SDif[IfNum].Dat :> >> Dat;
         if(0x0FFFFFFF == Dat) DatStat = DAT_RECEIVING_NIBBLE_H; // if start nibble arrived -> next state
         else if(400000 == i) return RES_ERROR; // busy timeout
         break;
       case DAT_RECEIVING_NIBBLE_H:
-        SDif[IfNum].Dat :> >> Dat;
         DatStat = DAT_RECEIVING_NIBBLE_L; // next state
         break;
       case DAT_RECEIVING_NIBBLE_L:
-        SDif[IfNum].Dat :> >> Dat;
         buff[DatByteCount++] = bitrev(Dat);
         if(!RespStat) // if response received... (can continue just sampling dat lines)
         {
-          while(DatByteCount % 512)
+          while(DatByteCount & 511)
           { /* todo: doing this stuff with assembly would highly increase performance */
-            SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; // 1 clock pulse
-            SDif[IfNum].Dat :> >> Dat;
-            SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; // 1 clock pulse
-            SDif[IfNum].Dat :> >> Dat;
+
+		  /* Information from http://wiki.seabright.co.nz/wiki/SdCardProtocol.html
+               * Data is clocked into the host or card on the rising edge of CLK and changes on the falling edge.
+               * This is equivalent to the SPI (0, 0) mode.
+               */
+            SDif[IfNum].Clk <: 1; NOP_PAUSE_SETUP; SDif[IfNum].Dat :> >> Dat; SDif[IfNum].Clk <: 0; NOP_PAUSE_HOLD; // 1 clock pulse
+            SDif[IfNum].Clk <: 1; NOP_PAUSE_SETUP; SDif[IfNum].Dat :> >> Dat; SDif[IfNum].Clk <: 0; NOP_PAUSE_HOLD; // 1 clock pulse
             buff[DatByteCount++] = bitrev(Dat);
           }
+		  
           j = 17; DatStat = DAT_RECEIVING_CRC; // next state
           break;
         }
@@ -206,9 +305,8 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
       break;
   }
 
-  for(i = 8; i; i--) // send 8 clocks
-  { SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; }
-
+  ToggleClock(8, SDif[IfNum].Clk);            // Send 8 clock toggles
+  
   if(0 > DataBlocks) // a write operation
   {
     do
@@ -216,9 +314,13 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
       set_port_drive(SDif[IfNum].Dat);
 
       Crc0 = Crc1 = Crc2 = Crc3 = 0;
-      SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: 0; SDif[IfNum].Clk <: 1;  // start data block
+	  /* Information from http://wiki.seabright.co.nz/wiki/SdCardProtocol.html
+       * Data is clocked into the host or card on the rising edge of CLK and changes on the falling edge.
+       * This is equivalent to the SPI (0, 0) mode.
+       */
+      SDif[IfNum].Dat <: 0; NOP_PAUSE_WR_SETUP; SDif[IfNum].Clk <: 1; NOP_PAUSE_WR_HOLD; SDif[IfNum].Clk <: 0;  // start data block
 
-      for(j = 512/4; j; j--) // send bytes of data (512/4 int)
+	  for(j = 512/4; j; j--) // send bytes of data (512/4 int)
       {
         Dat = byterev(bitrev((buff, int[])[DatByteCount++]));
 
@@ -239,7 +341,9 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
         crc8shr(Crc0, D0, CRC16_POLY);
 
         for(i = 8; i; i--) // send 8 nibbles
-        { SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: >> Dat; SDif[IfNum].Clk <: 1; } // todo: do this in assembly
+		
+        // Add no-ops to allow setup and hold times
+        { SDif[IfNum].Dat <: >> Dat; NOP_PAUSE_WR_SETUP; SDif[IfNum].Clk <: 1; NOP_PAUSE_WR_HOLD; SDif[IfNum].Clk <: 0; } // todo: do this in assembly
       }
 
       // write CRCs, end nibble and wait busy
@@ -249,38 +353,31 @@ static DRESULT SendCmd(BYTE IfNum, BYTE Cmd, DWORD Arg, RESP_TYPE RespType, int 
       crc32(Crc3, 0, CRC16_POLY); // flush crc engine
       for(i = 16; i; i--)
       {
-        Dat = Crc3 & 1 | (Crc2 & 1) << 1 | (Crc1 & 1) << 2 | (Crc0 & 1) << 3;
-        SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: Dat; SDif[IfNum].Clk <: 1;
+        Dat = (Crc3 & 1) | ((Crc2 & 1) << 1) | ((Crc1 & 1) << 2) | ((Crc0 & 1) << 3);
+        // Add no-ops to allow setup and hold times
+        SDif[IfNum].Dat <: Dat; NOP_PAUSE_WR_SETUP; SDif[IfNum].Clk <: 1;NOP_PAUSE_WR_HOLD; SDif[IfNum].Clk <: 0;
         Crc3 >>= 1; Crc2 >>= 1; Crc1 >>= 1; Crc0 >>= 1;
       }
-      SDif[IfNum].Clk <: 0; SDif[IfNum].Dat <: 0xF; SDif[IfNum].Clk <: 1; // end data block
+      SDif[IfNum].Dat <: 0xF; NOP_PAUSE_WR_SETUP; SDif[IfNum].Clk <: 1;NOP_PAUSE_WR_HOLD; SDif[IfNum].Clk <: 0;
 
       if(Is_XS1_G_Core) // check if an XS1-G can enable internal pull-up
         set_port_pull_up(SDif[IfNum].Dat); // otherwise need an external pull-up resistor D0 (Dat3) pin
       SDif[IfNum].Dat :> void;
-      for(i = 8; i; i--) // send 8 clocks
-      { SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1;}
 
-      i = 4000000;
-      do // wait busy
-      {
-        SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; SDif[IfNum].Dat :> Dat;
-        if(!i--) return RES_ERROR; // busy timeout
-      }
-      while(!(Dat & 0x8));
+      ToggleClock(8, SDif[IfNum].Clk);            // Send 8 clock toggles
+
+      // Wait for Dat bit 3 to go high
+      Dat = WaitForTimed(SDif[IfNum].Dat, 0x8, 0x8, SDif[IfNum].Clk);
+      if(!(Dat &0x08)) return RES_ERROR;
     }
     while(++DataBlocks);
   }
 
   if(R1B == RespType)
   {
-    i = 4000000;
-    do // wait busy
-    {
-      SDif[IfNum].Clk <: 0; SDif[IfNum].Clk <: 1; SDif[IfNum].Dat :> Dat;
-      if(!i--) return RES_ERROR; // busy timeout
-    }
-    while(!(Dat & 0x8));
+    // Wait for Dat bit 3 to go high
+    Dat = WaitForTimed(SDif[IfNum].Dat, 0x8, 0x8, SDif[IfNum].Clk);
+    if(!(Dat &0x08)) return RES_ERROR;
   }
   return RES_OK;
 }
@@ -317,10 +414,13 @@ DSTATUS disk_initialize(BYTE IfNum)
   do
   {
     if(SendCmd(IfNum, 55, 0, R1, 0, DummyData, Resp)) return RES_ERROR;
+	
     if(SendCmd(IfNum, 41, BlockLen, R3, 0, DummyData, Resp)) return RES_ERROR;  // ACMD41
+	
     if(i++ == 1000) return RES_ERROR; // busy timeout
   }
   while((Resp[1] & 1) == 0); // repeat while busy
+  
   SDif[IfNum].Ccs = ((Resp[1] & 2)) ? 1 : 0;
   if(SendCmd(IfNum, 2, 0, R2, 0, DummyData, Resp)) return RES_ERROR; // get CID
   if(SendCmd(IfNum, 3, 0, R6, 0, DummyData, Resp)) return RES_ERROR; // get RCA
@@ -388,7 +488,6 @@ DRESULT disk_write(BYTE IfNum, const BYTE buff[],DWORD sector, BYTE count)
 
 DSTATUS disk_status(BYTE IfNum)
 {
-  DSTATUS s;
   unsigned char DummyData[1];
   RESP Resp;
 
