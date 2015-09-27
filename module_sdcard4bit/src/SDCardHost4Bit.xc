@@ -30,11 +30,12 @@ typedef struct SDHostInterface
   unsigned long BlockNr; // number of 512 bytes blocks. Returned by initialization.
 } SDHostInterface;
 
-static SDHostInterface SDif[] = 
+static SDHostInterface SDif[] = {
 // LIST HERE THE PORTS USED FOR THE INTERFACES
 //       CLK,         CMD,     DAT3..0,
-{XS1_PORT_1M, XS1_PORT_1N, XS1_PORT_4E, 0, 0, 0}; // ports used for interface #0
+{XS1_PORT_1M, XS1_PORT_1N, XS1_PORT_4E, 0, 0, 0}, // ports used for interface #0
 //{XS1_PORT_1O, XS1_PORT_1P, XS1_PORT_4F, 0, 0, 0}; // ports used for interface #1
+};
 
 /***************************/
 
