@@ -28,6 +28,8 @@ extern "C" {
 #error Wrong configuration file (ffconf.h).
 #endif
 
+#include <xccompat.h>       // Enable XMOS streaming channel types to pass through.  Need this before other header files
+#define streaming
 
 
 /* Definitions of volume management */
@@ -211,6 +213,9 @@ FRESULT f_opendir (DIR*, const TCHAR*);        /* Open an existing directory */
 FRESULT f_readdir (DIR*, FILINFO*);          /* Read a directory item */
 FRESULT f_stat (const TCHAR*, FILINFO*);      /* Get file status */
 FRESULT f_write (FIL*, const void*, UINT, UINT*);  /* Write data to a file */
+
+FRESULT f_write_streamed(FIL *fp, streaming chanend c, UINT btw, UINT *bw);    // XMOS Streams version of write
+
 FRESULT f_getfree (const TCHAR*, DWORD*, FATFS**);  /* Get number of free clusters on the drive */
 FRESULT f_truncate (FIL*);              /* Truncate file */
 FRESULT f_sync (FIL*);                /* Flush cached data of a writing file */

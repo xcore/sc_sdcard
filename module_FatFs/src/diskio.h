@@ -1,10 +1,12 @@
 /*-----------------------------------------------------------------------
-/  Low level disk interface modlue include file
+/  Low level disk interface module include file
 /-----------------------------------------------------------------------*/
 
 #ifndef _DISKIO
 
-#define BUS_MODE_4BIT
+#define BUS_MODE_4BIT           // Enable the fast 4-bit SD-card mode here
+#define _STREAM_FS              // Enable the XMOS Streaming Write function here
+
 
 #define _READONLY       0       /* 1: Remove write functions */
 #define _USE_IOCTL      1       /* 1: Use disk_ioctl fucntion */
@@ -34,6 +36,7 @@ DSTATUS disk_status (BYTE);
 DRESULT disk_read (BYTE, BYTE[], DWORD, BYTE);
 #if     _READONLY == 0
 DRESULT disk_write (BYTE, const BYTE[], DWORD, BYTE);
+DRESULT disk_write_streamed(BYTE IfNum, streaming chanend c,DWORD sector, BYTE count);
 #endif
 DRESULT disk_ioctl (BYTE, BYTE, BYTE[]);
 
@@ -76,3 +79,4 @@ DRESULT disk_ioctl (BYTE, BYTE, BYTE[]);
 
 #define _DISKIO
 #endif
+

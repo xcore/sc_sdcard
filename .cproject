@@ -17,7 +17,7 @@
 							<targetPlatform archList="all" binaryParser="com.xmos.cdt.core.XEBinaryParser" id="com.xmos.cdt.core.platform.1329358521" isAbstract="false" osList="linux,win32,macosx" superClass="com.xmos.cdt.core.platform"/>
 							<builder arguments="CONFIG=Debug" id="com.xmos.cdt.builder.base.1109213840" keepEnvironmentInBuildfile="false" managedBuildOn="false" superClass="com.xmos.cdt.builder.base"/>
 							<tool id="com.xmos.cdt.xc.compiler.1702169440" name="com.xmos.cdt.xc.compiler" superClass="com.xmos.cdt.xc.compiler">
-								<option id="com.xmos.c.compiler.option.include.paths.1139150311" name="com.xmos.c.compiler.option.include.paths" superClass="com.xmos.c.compiler.option.include.paths" valueType="includePath"/>
+								<option id="com.xmos.c.compiler.option.include.paths.1139150311" name="com.xmos.c.compiler.option.include.paths" superClass="com.xmos.c.compiler.option.include.paths"/>
 								<option id="com.xmos.xc.compiler.option.include.paths.1162566658" name="com.xmos.xc.compiler.option.include.paths" superClass="com.xmos.xc.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${XMOS_TOOL_PATH}target/include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${XMOS_TOOL_PATH}target/include/gcc&quot;"/>
@@ -410,7 +410,7 @@
 							<targetPlatform archList="all" binaryParser="com.xmos.cdt.core.XEBinaryParser" id="com.xmos.cdt.core.platform.1091304538" isAbstract="false" osList="linux,win32,macosx" superClass="com.xmos.cdt.core.platform"/>
 							<builder arguments="CONFIG=Release" id="com.xmos.cdt.builder.base.460929844" keepEnvironmentInBuildfile="false" managedBuildOn="false" superClass="com.xmos.cdt.builder.base"/>
 							<tool id="com.xmos.cdt.xc.compiler.1681227869" name="com.xmos.cdt.xc.compiler" superClass="com.xmos.cdt.xc.compiler">
-								<option id="com.xmos.c.compiler.option.include.paths.884846939" name="com.xmos.c.compiler.option.include.paths" superClass="com.xmos.c.compiler.option.include.paths" valueType="includePath"/>
+								<option id="com.xmos.c.compiler.option.include.paths.884846939" name="com.xmos.c.compiler.option.include.paths" superClass="com.xmos.c.compiler.option.include.paths"/>
 								<option id="com.xmos.xc.compiler.option.include.paths.658557549" name="com.xmos.xc.compiler.option.include.paths" superClass="com.xmos.xc.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${XMOS_TOOL_PATH}target/include&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${XMOS_TOOL_PATH}target/include/gcc&quot;"/>
